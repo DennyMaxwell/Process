@@ -1,0 +1,43 @@
+Mikrotik
+/system logging action
+add name=Graylog remote=<IP Graylog> remote-port=<Port Graylog> src-address=<IP Mikrotik> target=remote
+
+Obs.: Utilizar para novos equipamentos portas acima de 5000, sendo elas 5001, 5002, 5003 …
+
+/system logging
+add action=Graylog topics=critical
+add action=Graylog topics=error
+add action=Graylog topics=info
+add action=Graylog topics=warning
+
+ 
+Huawei
+info-center channel 5 name loghost5
+info-center channel 6 name loghost1
+info-center channel 7 name loghost2
+info-center channel 8 name loghost3
+info-center channel 9 name loghost4
+
+ 
+info-center source arp channel 5 log level warning
+info-center source arp channel 6 log level notification
+info-center source arp channel 8 log level emergencies
+info-center source arp channel 9 log level error
+info-center loghost <IP Graylog> channel 7 port <Port Graylog>
+
+ 
+
+OLT FURUKAWA
+Nos modelos G4S, G8S, LD3032, LD3008, LW3008C, LD3016 e G2500:
+
+syslog output info local volatile
+syslog output info local non-volatile
+syslog output info remote <IP Graylog>
+syslog output debug remote <IP Graylog>
+syslog bind-address  <IP OLT>
+
+ 
+
+Para os modelos LD250x:    
+
+log syslog server <IP Graylog>
