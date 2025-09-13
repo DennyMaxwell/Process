@@ -1,0 +1,469 @@
+Guia de Instalação - Hyperglass (extraído do PDF)
+
+Este repositório contém os passos de instalação do Hyperglass, conforme descrito no documento original em PDF.
+
+Requisitos
+
+Debian Linux atualizado
+Acesso root ou usuário com privilégios de sudo
+Conexão à internet
+
+-Pacotes necessários
+# apt install -y python3-dev python3-pip python3-pil python3-pil.imagetk\
+python3-libtiff python3-glymur libtiff-dev libfreetype-dev liblcms2-2\
+liblcms2-utils libwebp-dev libboost-dev libimagequant-dev libraqm-dev\
+libjpeg-dev wget unzip zip git curl gnupg2
+
+-Script de instalação
+# cd /tmp
+# wget https://raw.githubusercontent.com/remontti/hyperglass/main/install.sh
+# bash install.sh
+
+-Ao finalize execute o comando hyperglass –help para ver se a instalação esta funcionando.
+# hyperglass --help
+
+#Usage: hyperglass [OPTIONS] COMMAND [ARGS]...
+   hyperglass Command Line Interface
+Options:
+   -v, --version  🔢 hyperglass version
+   -h, --help     🙏 Show this help message
+Commands:
+   build-ui     🦋 Create a new UI build
+   clear-cache  🧼 Clear the Redis cache
+   secret       🔒 Generate agent secret
+   setup        🧰 Run the setup wizard
+   start        🚀 Start web server
+   system-info  🌡  Get system information for a bug report#
+
+-Configurando hyperglass
+# hyperglass setup
+
+-Vamos definir o diretório de configurações, selecione com a seta para baixo /etc/hyperglass
+[?] Choose a directory for hyperglass: /etc/hyperglass
+   /root/hyperglass
+> /etc/hyperglass
+
+-Antes de deixar você chamar no erro webpack:
+[ERROR] 20230330 10:02:32 | hyperglass.util.frontend:401 | build_frontend →
+Messages:
+info  - Using webpack 5. Reason: future.webpack5 option enabled https://nextjs.org/docs/messages/webpack5
+
+-Vamos a solução localize webpack5: true, e altere para webpack5: false,
+# sed -i 's/webpack5: true,/webpack5: false,/g' /usr/local/lib/python3.9/dist-packages/hyperglass/ui/next.config.js
+
+-Parâmetros de configuração
+
+-Crie o arquivo /etc/hyperglass/hyperglass.yaml
+# vim /etc/hyperglass/hyperglass.yaml
+
+-Ajuste suas informações. Doc
+# https://hyperglass.dev/docs/parameters
+debug: false
+developer_mode: false
+org_name: RR64
+primary_asn: 12345
+site_title: Looking Glass RR64
+site_description: "{org_name} Network Looking Glass"
+site_keywords: [hyperglass, looking glass, routing, bgp]
+request_timeout: 30
+listen_address: "172.18.18.79"  # IP que ira startar o serviço
+listen_port: 80  # Porta do servico
+#
+# https://hyperglass.dev/docs/response-caching
+cache:
+  database: 0
+  host: localhost
+  port: 6379
+  show_text: true
+  timeout: 120
+#
+# https://hyperglass.dev/docs/messages/
+messages:
+  acl_denied: "{target} is a member of {denied_network}, which is not allowed."
+  acl_not_allowed: "{target} is not allowed."
+  authentication_error: Authentication error occurred.
+  connection_error: "Error connecting to {device_name}: {error}"
+  feature_not_enabled: "{feature} is not enabled for {device_name}."
+  general: Something went wrong.
+  invalid_field: "{input} is an invalid {field}."
+  invalid_input: "{target} is not a valid {query_type} target."
+  no_input: "{field} must be specified."
+  no_output: The query completed, but no matching results were found.
+  no_response: No response.
+  parsing_error: An error occurred while parsing the query output.
+  request_timeout: Request timed out.
+  vrf_not_associated: VRF {vrf_name} is not associated with {device_name}.
+  vrf_not_found: VRF {vrf_name} is not defined.
+#
+# https://hyperglass.dev/docs/logging/ (/var/log/hyperglass.log)
+logging:
+  directory: /var/log
+  format: text
+  max_size: 50 MB
+#
+# https://hyperglass.dev/docs/query-settings/
+queries:
+  bgp_route:
+    display_name: BGP Route
+    enable: true
+  bgp_community:
+    #Huwei modo structured não fuciona
+    display_name: BGP Community
+    enable: false
+    mode: select
+    communities:
+      - community: 12345:666
+        display_name: Blackhole
+        description: 12345:666
+  bgp_aspath:
+    #Huwei modo structured não fuciona
+    display_name: BGP AS Path
+    enable: false
+    pattern:
+      asdot: '^(\^|^\_)((\d+\.\d+)\_|(\d+\.\d+)\$|(\d+\.\d+)\(\_\.\+\_\))+$'
+      asplain: '^(\^|^\_)(\d+\_|\d+\$|\d+\(\_\.\+\_\))+$'
+      mode: asplain
+  ping:
+    display_name: Ping
+    enable: true
+  traceroute:
+    display_name: Traceroute
+    enable: true
+    #
+# https://hyperglass.dev/docs/table-output/
+structured:
+  rpki:
+    mode: external
+#  communities:
+#    #Para não exibir nenhuma communities
+#    mode: deny
+#  communities:
+#    # Para permitir apenas...
+#    mode: permit
+#    items:
+#      - '65000:\d+'
+#      - '65[1-4]00:\d+'
+# https://hyperglass.dev/docs/ui/configuration/
+web:
+  links:
+    - title: PeeringDB
+      url: https://www.peeringdb.com/asn/12345
+      side: left
+      order: 1
+    - title: Qrator
+      url: https://radar.qrator.net/AS12345
+      side: left
+      order: 2
+    - title: RADb
+      url: https://www.radb.net/query?advanced_query=&keywords=AS12345
+      side: left
+      order: 3
+    - title: IRR Explorer
+      url: https://irrexplorer.nlnog.net/asn/AS12345
+      side: left
+      order: 4
+    - title: RDAP
+      url: https://rdap.registro.br/autnum/12345
+      side: left
+      order: 5
+    - title: RR64
+      url: https://www.RR64.com.br
+      side: right
+      order: 0
+  menus:
+    - title: Contato
+      content: "Please contact [noc@RR64.com.br](mailto:noc@RR64.com.br) to get support."
+      side: right
+    - title: Termos e Condições
+      content: /etc/hyperglass/terms-and-conditions.md
+      side: right
+  # https://hyperglass.dev/docs/ui/logo
+  logo:
+    dark: /etc/hyperglass/static/images/hyperglass-dark.svg
+    light: /etc/hyperglass/static/images/hyperglass-light.svg
+    favicon: /etc/hyperglass/static/images/hyperglass-icon.svg
+    height: null
+    width: 100%
+  # https://hyperglass.dev/docs/ui/text
+  text:
+    cache_icon: Cached from {time} UTC
+    cache_prefix: "Results cached for "
+    complete_time: Completed in {seconds}
+    fqdn_error: Unable to resolve {fqdn}
+    fqdn_error_button: Try Again
+    fqdn_message: Your browser has resolved {fqdn} to
+    fqdn_tooltip: Use {protocol}
+    no_communities: No Communities
+    query_location: Location
+    query_target: Target
+    query_type: Query Type
+    query_vrf: Routing Table
+    rpki_invalid: Invalid
+    rpki_unknown: No ROAs Exist
+    rpki_unverified: Not Verified
+    rpki_valid: Valid
+    subtitle: Network Looking Glass
+    title: hyperglass
+    title_mode: logo_subtitle
+  # https://hyperglass.dev/docs/ui/theme
+  # https://hyperglass.dev/docs/ui/example
+
+-Adicionando Dispositivos
+Para adicionar seus dispositivos para cunsultas LG, crie o arquivo /etc/hyperglass/devices.yaml. Vou deixar um exemplo básico para Huawei, Mikrotik e comando personalizados com Linux
+
+# vim /etc/hyperglass/devices.yaml
+
+-Adicione de acordo suas configurações
+# https://hyperglass.dev/docs/adding-devices
+routers:
+  - name: AS12345 RR64
+    address: 10.50.50.25
+    network:
+      name: as12345
+      display_name: Huawei
+    credential:
+      username: lookingglass
+      password: supersenha
+    port: 22
+    nos: huawei
+    vrfs:
+      - name: global
+        default: true
+        ipv4:
+          source_address: 200.200.200.200
+          access_list:
+            - network: 10.0.0.0/8
+              action: deny
+            - network: 192.168.0.0/16
+              action: deny
+            - network: 100.64.0.0/10
+              action: deny
+            - network: 172.16.0.0/12
+              action: deny
+            - network: 0.0.0.0/0
+              action: permit
+              ge: 8
+              le: 32
+        ipv6:
+          source_address: 2000:2000:1::1
+          access_list:
+            - network: ::/0
+              action: permit
+              ge: 32
+              le: 128
+  - name: Mkzao RR64
+    address: 172.18.18.1
+    network:
+      name: routerosrr
+      display_name: Mikrotik
+    credential:
+      username: usuario
+      password: senha
+    port: 22
+    nos: mikrotik_routeros
+    vrfs:
+      - name: global
+        default: true
+        ipv4:
+          source_address: 172.18.18.1
+        ipv6:
+          source_address: 2001:db8::2
+  - name: Localhost Hyperglass
+    address: 127.0.0.1
+    network:
+      name: test1
+      display_name: Linux
+    credential:
+      username: usuario
+      password: senha
+    nos: linux
+    commands: linux_comando_personlizado
+    vrfs:
+      - name: global
+        default: true
+        ipv4:
+          source_address: 192.168.0.5
+        ipv6:
+          source_address: 2001:db8:bebe:cafe:5
+
+
+-Comandos personalizados
+Acima adicionei um device linux, qual temos comandos personalizado, segue um exemplo de como seria. Crie o arquivo /etc/hyperglass/commands.yaml
+
+#https://hyperglass.dev/docs/commands
+linux_comando_personlizado:
+  ipv4_default:
+    bgp_route: 'echo bgp_route "{target}"'
+    bgp_aspath: 'echo bgp_aspath "{target}"'
+    bgp_community: 'echo bgp_community "{target}"'
+    ping: 'ping -c 4 "{target}"'
+    traceroute: 'traceroute -n "{target}"'
+  ipv6_default:
+    bgp_route: 'echo "{target}"'
+    bgp_aspath: 'echo "{target}"'
+    bgp_community: 'echo "{target}"'
+    ping: 'echo "{target}"'
+    traceroute: 'echo "{target}"'
+  ipv4_vpn:
+    bgp_route: 'echo "{vrf} {target}"'
+    bgp_aspath: 'echo "{vrf} {target}"'
+    bgp_community: 'echo "{vrf} {target}"'
+    ping: 'echo "{vrf} {target}"'
+    traceroute: 'echo "{vrf} {target}"'
+  ipv6_vpn:
+    bgp_route: 'echo "{vrf} {target}"'
+    bgp_aspath: 'echo "{vrf} {target}"'
+    bgp_community: 'echo "{vrf} {target}"'
+    ping: 'echo "{vrf} {target}"'
+    traceroute: 'echo "{vrf} {target}"'
+
+-Crie um arquivo para seis termos:
+# vim /etc/hyperglass/terms-and-conditions.md
+
+-Descreva de acordo suas políticas.
+Ao usar {site_title}, você concorda em cumprir os seguintes termos de uso:
+Todas as consultas executadas nesta página são registradas para análise e solução de problemas.
+Os usuários estão proibidos de automatizar consultas ou tentar processar consultas em massa. Este serviço é fornecido com base no melhor esforço, e {org_name} não oferece garantias ou garantias de disponibilidade ou desempenho.
+
+-Agora vamos a construção da interface do usuário. o Comando a baixo pode levar uns minutinho.
+
+# cd /etc/hyperglass/
+# hyperglass build-ui
+
+-Aguarde até ter a resposta:
+[SUCCESS] 20230329 21:36:48 | hyperglass.util.frontend:386 | build_frontend → Completed UI build
+✅ Completed UI build in production mode
+
+-Iniciando o serviço
+Poderíamos iniciar com o comando hyperglass start, mas vamos criar um serviço no linux para fazer esse trabalho, para deixar até mesmo automatizado durante o boot. para isso irei criar uma pasta /etc/hyperglass/service/ onde irei criar nosso serviço.
+
+# mkdir /etc/hyperglass/service/
+# vim /etc/hyperglass/service/hyperglass.service
+
+-Agora vamos instruir o que deve ser feito.
+[Unit]
+Description=hyperglass
+After=network.target
+Requires=redis-server.service
+[Service]
+User=root
+Group=root
+ExecStart=/usr/local/bin/hyperglass start
+ExecStop=/usr/bin/pkill -f hyperglass
+TimeoutStartSec=120
+TimeoutStopSec=300
+[Install]
+WantedBy=multi-user.target
+
+-Vamos cria um apontamento, recarecar nosso daemon, dar um enable para deixar iniciando com o boot, em seguida vamos iniciar o serviço.
+
+# ln -s /etc/hyperglass/service/hyperglass.service /etc/systemd/system/hyperglass.service
+# systemctl daemon-reload
+# systemctl enable hyperglass
+# systemctl start hyperglass
+# systemctl status hyperglass
+
+-Pode levar um minutinho até iniciar, você pode acompanhar os logs.
+# tail -f /var/log/hyperglass.log
+
+-Quando aparecer a mensagem a baixo você pode acessar em seu navegador:
+...Started hyperglass 1.0.4 on http://SEUIP:PORTA with 6 workers
+
+-Pode verificar também as portas que estão sendo ouvidas.
+# ss -putan  | grep LISTEN | grep hyperglass
+
+Acesse me seu navegador http://SEUIP:PORTA
+
+
+-Bonus: Proxy Nginx + Https
+É bem comum querer executar o hyperglass em outra porta e somente para localhost, e criar um proxy para acesso web bem como ativar suporte https para sua página, pois em alguns casos ele pode esta rodando junto com outros serviços sem problema algum. Não é necessário ter uma “VM” só para isso. Vamos ao exemplo
+
+# vim /etc/hyperglass/hyperglass.yaml
+
+-Altere o IP em listen_address para nosso endereço da loopback 127.0.0.1 e defina outra porta listen_port que ira rodar o serviço, no meu caso vou usar 58000
+listen_address: "127.0.0.1"
+listen_port: 58000
+
+-Reinicie o hyperglass
+systemctl restart hyperglass
+
+-Instale o Nxgix
+# apt install nginx
+# sed -i 's/# server_tokens/server_tokens/' /etc/nginx/nginx.conf
+
+-Em alguns caso recomendo deletar as conf padrões, caso tiver problemas.
+# rm /etc/nginx/sites-enabled/default
+
+-Crie um arquivo de configuração o nginx criar um proxy do nosso hyperglass
+# vim /etc/nginx/sites-available/hyperglass.conf
+
+-Adicione
+server {
+  listen 80;
+  listen [::]:80;
+  server_name lg.RR64.com.br;
+  #server_name _;
+  # Descomente para deixar restrito apenas para determinados prefixos ou IPs.
+  #allow  192.168.87.0/24;
+  #allow  127.0.0.1;
+  #allow  2001:0db8::/32;
+  #allow  ::1;
+  #deny   all;
+  #error_page  403   http://www.RR64.com.br;
+  client_max_body_size 2M;
+  root /etc/hyperglass/static;
+  location / {
+    try_files $uri $uri/ /ui /ui/$uri =404;
+    index /ui/index.html;
+  }
+  location /openapi.json {
+      try_files $uri @proxy_to_app;
+  }
+  location /custom/ {
+      try_files $uri $uri/ /custom;
+  }
+  location /images/ {
+      try_files $uri $uri/ /images;
+  }
+  location /api {
+      try_files $uri @proxy_to_app;
+  }
+  location @proxy_to_app {
+    proxy_set_header X-Real-IP $RR64;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Host $http_host;
+    proxy_redirect off;
+    proxy_pass http://127.0.0.1:58000;
+  }
+}
+
+-Link o arquivo no diretório /etc/nginx/sites-enabled qual será carregado ao iniciar o nginx, em seguira reinicie o serviço do nginx.
+# ln -s /etc/nginx/sites-available/hyperglass.conf /etc/nginx/sites-enabled/hyperglass.conf
+# systemctl restart nginx
+
+
+-Agora você já pode acessar seu hyperglass através do nginx.
+Ao executar o Certbot instalado via apt tive alguns erros do python, acredito que conflitou alguma coisa com o hyperglass, (como meu tempo é bem curto inclusive para esta escrevendo aqui) realizei a instalação via snap qual resolveu meu problema.
+Segue a instalação do snap:
+
+# apt install snapd
+# snap install core
+
+-Instale o certbot via snap, crie um link em nossos binários, em seguida execute ele
+# snap install --classic certbot
+# ln -s /snap/bin/certbot /usr/bin/certbot
+# certbot
+
+Informe os dados, ao finalizar o mesmo irá já ajustar seu arquivo do nginx, e basta acessar seu domínio.
+
+Não esqueça que a cada 90 dias o certificado expira, então crie uma rotina para renovação, você pode adicionar ao cron agendando por exemplo para todo dia primeiro tentar renovar.
+
+# echo '00 00   1 * *   root     certbot renew -q' >> /etc/crontab
+# systemctl restart cron
+
+https://hyperglass.dev/docs/introduction/
+Parabéns você finalizou! Se quiser fazer uma doação para o café ficarei muito feliz pelo seu reconhecimento!
+
+
+
