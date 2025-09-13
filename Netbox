@@ -1,0 +1,199 @@
+Requisitos necessários
+Sistema Operacional	Debian 12.x
+CPU	4/8 CPU
+Memória RAM	8 Gb
+HDD	60 Gb
+
+- PostgreSQL, Atualização e instalação do postgresql:
+apt update
+apt install -y postgresql
+
+-Iniciar serviço e habilitar para inicializar com a máquina:
+systemctl start postgresql
+systemctl enable postgresql
+
+-Verificar versão do banco:
+psql -V
+
+-Será necessário entrar no banco e criar o database, seguindo os seguintes comandos:
+su - postgres
+psql
+
+CREATE DATABASE netboxdb;
+CREATE USER netboxuser WITH PASSWORD 'SENHA-FORTE';
+GRANT ALL PRIVILEGES ON DATABASE netboxdb TO netboxuser;
+ALTER DATABASE netboxdb OWNER TO netboxuser;
+
+psql --username netbox --password --host localhost netbox
+netbox=> \conninfo
+
+-Definindo uma senha para o postegre
+\password
+'SENHA-FORTE'
+
+show hba_file;
+
+-Guarde o caminho que o comando show hba_file; aprensentou na tela pois vamos precisar dele novamente mais tarde.
+netbox=> \q
+exit
+
+-Altere o arquvio pg_hba.conf que está no diretório que verificamos anteriormente com o comando show hba_file;
+================================Encontrar================================
+# Database administrative login by Unix domain socket
+local   all             postgres                                peer
+
+================================Alterar para================================
+# Database administrative login by Unix domain socket
+local   all             postgres                                md5
+
+-Tente logar novamente no postegree com a senha definida.
+
+
+ - Redis - Instalando o servidor redis que é necessário para utilização do netbox:
+apt install -y redis-server
+redis-server -v
+redis-cli ping
+
+ - Python - Instalando python e algumas bibliotecas essenciais:
+apt install -y  python3-pip python3-venv python3-dev build-essential libxml2-dev libxslt1-dev libffi-dev libpq-dev libssl-dev zlib1g-dev
+
+-NETBOX - Fazendo download do diretório referente ao netbox:
+wget https://github.com/netbox-community/netbox/archive/refs/tags/v4.2.9.tar.gz
+
+-Descompactando e criando link:
+tar -xzf v4.2.9.tar.gz -C /opt
+ln -s /opt/netbox-4.2.9/ /opt/netbox
+
+-Criando diretório do netbox:
+mkdir -p /opt/netbox/
+cd /opt/netbox/
+
+-Criação de usuário e liberando permissão:
+adduser --system --group netbox
+chown --recursive netbox /opt/netbox/netbox/media/
+
+-Entrar no diretório e subir a estrutura no configuration.py:
+cd /opt/netbox/netbox/netbox/
+cp configuration_example.py configuration.py
+
+-Gerar chave para utilizar adiante:
+python3 ../generate_secret_key.py
+Obs.: Anote a chave gerada com o comando acima:
+
+-Editar o configuration.py:
+nano configuration.py
+
+-Altere os valores como abaixo:
+ALLOWED_HOSTS = ['*']
+
+DATABASE = {
+    'NAME': 'netboxdb',       # Database name
+    'USER': 'netboxuser',     # PostgreSQL username
+    'PASSWORD': 'SENHA-FORTE',      # PostgreSQL password
+}
+# Gerado com o comando ./generate_secret_key.py
+SECRET_KEY = 'XXXXXXXXXXXXXXX'
+
+
+-Configuração para o netbox:
+sh -c "echo 'napalm' >> /opt/netbox/local_requirements.txt"
+sh -c "echo 'django-storages' >> /opt/netbox/local_requirements.txt"
+
+/opt/netbox/upgrade.sh
+source /opt/netbox/venv/bin/activate
+
+-Criar usuario para acesso netbox:
+cd /opt/netbox/netbox
+python3 manage.py createsuperuser
+
+<SEU USER>
+'SENHA-USUARIO-ACESSO-WEB'
+
+-Criando link para o housekeeping do netbox:
+ln -s /opt/netbox/contrib/netbox-housekeeping.sh /etc/cron.daily/netbox-housekeeping
+
+-Configurando o daemon (serviços em sgundo plano):
+cp /opt/netbox/contrib/gunicorn.py /opt/netbox/gunicorn.py
+cp -v /opt/netbox/contrib/*.service /etc/systemd/system/
+systemctl daemon-reload
+
+-Iniciar serviço e habilitar para inicializar com a máquina:
+systemctl start netbox netbox-rq
+systemctl enable netbox netbox-rq
+
+-Verificar serviços do netbox:
+systemctl status netbox.service
+
+-Criação de chaves para o certificado do site:
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+-keyout /etc/ssl/private/netbox.key \
+-out /etc/ssl/certs/netbox.crt
+
+-Instalação e configuração do nginx:
+apt install -y nginx
+cp /opt/netbox/contrib/nginx.conf /etc/nginx/sites-available/netbox
+
+rm /etc/nginx/sites-enabled/default
+ln -s /etc/nginx/sites-available/netbox /etc/nginx/sites-enabled/netbox
+systemctl restart nginx
+
+-Instalando plugins necessários no Netbox: 
+source /opt/netbox/venv/bin/activate
+
+pip install netbox-topology-views==4.3.0
+pip install netbox-bgp==0.15.0
+pip install netbox-qrcode==0.0.17
+pip install netbox-metatype-importer==0.6.0
+
+echo netbox-topology-views >> /opt/netbox/local_requirements.txt
+echo netbox-bgp >> /opt/netbox/local_requirements.txt
+echo netbox-qrcode >> /opt/netbox/local_requirements.txt
+echo netbox-metatype-importer >> /opt/netbox/local_requirements.txt
+
+-Declarar plugins no arquivo de configuração:
+nano /opt/netbox/netbox/netbox/configuration.py
+
+-Deixar da seguinte maneira:
+# In your configuration.py
+PLUGINS = ['netbox_topology_views',
+           'netbox_bgp',
+           'netbox_qrcode',
+           'netbox_metatype_importer'
+          ]
+
+PLUGINS_CONFIG = {
+    'netbox_topology_views': {
+        'static_image_directory': 'netbox_topology_views/img',
+        'allow_coordinates_saving': True,
+        'always_save_coordinates': True
+    },
+
+    'netbox_metatype_importer': {
+        'github_token': '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'
+    }
+}
+
+-Ativar funções para o netbox:
+python3 manage.py migrate
+python3 manage.py collectstatic --no-input
+
+-Reiniciar o netbox:
+systemctl restart netbox netbox-rq
+
+-Para incluir imagens no Netbox:
+cd /opt/netbox/netbox/static/netbox_topology_views/img
+
+Obs.: Adicionar via WinSCP ou algum outro serviço de ftp ou sftp
+
+
+
+
+
+
+
+
+
+
+
+
+
