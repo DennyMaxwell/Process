@@ -1,0 +1,73 @@
+#!/bin/bash
+
+# Verifica se o script está sendo executado como root
+if [ "$EUID" -ne 0 ]; then
+    echo "Este script deve ser executado como root."
+    exit 1
+fi
+
+# Solicita que o usuário insira uma senha para o Graylog
+echo "Digite uma senha para o usuário admin do Graylog:"
+read -s USER_PASSWORD
+
+# Obtém o IP atual da máquina
+SERVER_IP=$(hostname -I | awk '{print $1}')
+
+# Atualiza pacotes do sistema
+apt update && apt upgrade -y
+
+# Instala dependências
+apt install -y wget curl gnupg software-properties-common apt-transport-https ca-certificates lsb-release pwgen
+
+# Instala Java 17
+apt install -y openjdk-17-jdk
+
+# Verifica a versão do Java
+java -version
+
+# Instala Elasticsearch
+curl -fsSL https://artifacts.elastic.co/GPG-KEY-elasticsearch | gpg --dearmor -o /etc/apt/trusted.gpg.d/elastic.gpg
+echo "deb https://artifacts.elastic.co/packages/oss-7.x/apt stable main" | tee /etc/apt/sources.list.d/elastic-7.x.list
+apt update && apt install -y elasticsearch-oss
+
+# Configura Elasticsearch
+echo -e "cluster.name: graylog\naction.auto_create_index: false" >> /etc/elasticsearch/elasticsearch.yml
+
+# Instala MongoDB
+curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/mongodb-6.gpg
+echo "deb http://repo.mongodb.org/apt/debian bullseye/mongodb-org/6.0 main" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+apt update && apt install -y mongodb-org
+
+# Habilita e verifica MongoDB
+systemctl enable --now mongod
+systemctl status mongod --no-pager
+
+# Instala Graylog
+wget https://packages.graylog2.org/repo/packages/graylog-5.0-repository_latest.deb
+dpkg -i graylog-5.0-repository_latest.deb
+apt update && apt install -y graylog-server
+
+# Gera senha e chave secreta
+PASSWORD_SECRET=$(pwgen -N 1 -s 96)
+ROOT_PASSWORD_SHA2=$(echo -n "$USER_PASSWORD" | sha256sum | awk '{print $1}')
+
+# Configura Graylog
+sed -i "s|password_secret =.*|password_secret = $PASSWORD_SECRET|" /etc/graylog/server/server.conf
+sed -i "s|root_password_sha2 =.*|root_password_sha2 = $ROOT_PASSWORD_SHA2|" /etc/graylog/server/server.conf
+sed -i "s|root_username =.*|root_username = admin|" /etc/graylog/server/server.conf
+sed -i "s|#http_bind_address =.*|http_bind_address = $SERVER_IP:9000|" /etc/graylog/server/server.conf
+
+# Reinicia Graylog
+systemctl daemon-reload
+systemctl enable --now graylog-server
+systemctl restart graylog-server
+
+# Habilita e reinicia Elasticsearch no final
+systemctl enable --now elasticsearch
+systemctl restart elasticsearch
+
+# Verifica status
+systemctl status graylog-server --no-pager
+
+# Finaliza o script
+echo "Instalação concluída. Acesse http://$SERVER_IP:9000 para usar o Graylog."
